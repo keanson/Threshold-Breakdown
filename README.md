@@ -41,4 +41,5 @@ Since the package uses a `src/` layout, run notebooks or scripts from the reposi
 ## Notes
 
 - Generated figures used in the paper are kept in `src/ftbp/results`.
+- Although the code is organized in package form, this repository is mainly provided for research reproducibility. The package structure is used to make experiments, dependencies, and workflows easier to maintain and reproduce. The codebase is therefore best understood as paper companion code rather than a polished public library.
 
