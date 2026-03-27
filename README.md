@@ -1,10 +1,11 @@
 # The Threshold Breakdown Point
 
-Official code for "The Threshold Breakdown Point".
-
-The codebase is organized as a small Python package under [`src/ftbp`](./src/ftbp), with exploratory and paper-facing notebooks under [`src/ftbp/experiments`](./src/ftbp/experiments) and generated figures under [`src/ftbp/results`](./src/ftbp/results).
+Official python implementation for the paper:
+**"The Threshold Breakdown Point"**
 
 ## Structure
+
+The codebase is organized as a small Python package under [`src/ftbp`](./src/ftbp), with exploratory and paper-facing notebooks under [`src/ftbp/experiments`](./src/ftbp/experiments) and generated figures under [`src/ftbp/results`](./src/ftbp/results).
 
 - `src/ftbp/estimators.py`: robust score functions and M-estimation utilities
 - `src/ftbp/score.py`: M-score tests related breakdown and bound calculations
