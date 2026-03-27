@@ -1,6 +1,4 @@
-Official python implementation for the paper:
-
-**"The Threshold Breakdown Point"**
+# The Threshold Breakdown Point
 
 ## Structure
 
