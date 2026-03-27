@@ -1,6 +1,6 @@
 # The Threshold Breakdown Point
 
-Research code for threshold breakdown analysis of thresholded robust procedures.
+Official code for "The Threshold Breakdown Point".
 
 The codebase is organized as a small Python package under [`src/ftbp`](./src/ftbp), with exploratory and paper-facing notebooks under [`src/ftbp/experiments`](./src/ftbp/experiments) and generated figures under [`src/ftbp/results`](./src/ftbp/results).
 
