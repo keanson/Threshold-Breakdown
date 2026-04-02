@@ -182,23 +182,35 @@ def huber_scale_range(x, m, delta=1.0, dist='normal'):
 def sign_split_rescalings(x, m, delta=1.0, scale_type='huber', dist='normal'):
     """
     Given data x and contamination size m, compute
-      a = S_min(m; x), b = S_max(m; x),
-      r_ab    = x_i/b if x_i>=0 else x_i/a,
-      rprime  = x_i/a if x_i>=0 else x_i/b.
+      underline_sigma = S_min(m; x), overline_sigma = S_max(m; x),
+      r_i      = x_i / underline_sigma if x_i >= 0 else x_i / overline_sigma,
+      r'_i     = x_i / underline_sigma if x_i < 0 else x_i / overline_sigma.
     """
     x_sorted = np.sort(x)
     if scale_type == 'huber':
-        S_max, S_min = huber_scale_range(x_sorted, m, delta=delta, dist=dist)
+        overline_sigma, underline_sigma = huber_scale_range(x_sorted, m, delta=delta, dist=dist)
     else:
         raise ValueError(f"Scale_type: {scale_type} not implemented")
-    
-    if S_min == 0:
-        S_min = 1e-8  # Avoid division by zero
-    a = S_min
-    b = S_max
-    r_ab      = np.where(x >= 0, x/b,      x/a)
-    rprime_ab = np.where(x >= 0, x/a,      x/b)
-    return a, b, r_ab, rprime_ab
+
+    underline_sigma = max(underline_sigma, 1e-8)
+    overline_sigma = max(overline_sigma, 1e-8)
+    r = np.where(x >= 0, x / underline_sigma, x / overline_sigma)
+    rprime = np.where(x < 0, x / underline_sigma, x / overline_sigma)
+    return underline_sigma, overline_sigma, r, rprime
+
+def _attacked_location_plus(x, m, delta=1.0, loss_type='huber'):
+    theta_loc = estimate_theta(x, delta, loss_type=loss_type)
+    eta_loc = eta_theta_plus(x, theta_loc, m, delta, loss_type)
+    if np.isnan(eta_loc):
+        return np.nan
+    return theta_loc + eta_loc
+
+def _attacked_location_minus(x, m, delta=1.0, loss_type='huber'):
+    theta_loc = estimate_theta(x, delta, loss_type=loss_type)
+    eta_loc = eta_theta_minus(x, theta_loc, m, delta, loss_type)
+    if np.isnan(eta_loc):
+        return np.nan
+    return theta_loc - eta_loc
 
 def eta_theta_plus(x, theta_hat, m, delta=1.0, loss_type='huber'):
     x_sorted = np.sort(x)
@@ -221,33 +233,31 @@ def eta_theta_minus(x, theta_hat, m, delta=1.0, loss_type='huber'):
     except ValueError:
         return np.nan
 
-# --- 3. two-stage estimator upper‐bounds from the Lemma ---
-def two_stage_eta_upper_plus(x, m, delta=1.0, loss_type='huber', scale_type='MAD', dist='normal'):
-    theta_hat, sigma_hat = two_stage(x, delta, loss_type, scale_type, dist)
-    a, b, r_ab, rprime = sign_split_rescalings(x, m, delta, scale_type, dist)
-    # theta_loc_hat = estimate_theta(rprime, delta, loss_type=loss_type)
-    eta_loc = eta_theta_plus(rprime, theta_hat * sigma_hat, m, delta, loss_type)
-    if theta_hat < 0:
-        c = a
-    else:
-        c = b
-    return ((c - sigma_hat) / sigma_hat) * theta_hat + b * eta_loc
+# --- 3. two-stage estimator upper bounds from the sign-split proposition ---
+def two_stage_eta_upper_plus(x, m, delta=1.0, loss_type='huber', scale_type='huber', dist='normal'):
+    theta_hat, _ = two_stage(x, delta, loss_type, scale_type, dist)
+    underline_sigma, overline_sigma, r, _ = sign_split_rescalings(x, m, delta, scale_type, dist)
+    attacked_loc = _attacked_location_plus(r, m, delta, loss_type)
+    if np.isnan(attacked_loc):
+        return np.nan
+
+    sigma_m = underline_sigma if attacked_loc <= 0 else overline_sigma
+    return max(sigma_m * attacked_loc - theta_hat, 0.0)
 
 def two_stage_eta_upper_minus(x, m, delta=1.0,
-                              loss_type='huber', scale_type='MAD', dist='normal'):
-    theta_hat, sigma_hat = two_stage(x, delta, loss_type, scale_type, dist)
-    a, b, r, rprime = sign_split_rescalings(x, m, delta, scale_type, dist)
-    # theta_loc_hat = estimate_theta(r, delta, loss_type=loss_type)
-    eta_loc = eta_theta_minus(r, theta_hat * sigma_hat, m, delta, loss_type)
-    if theta_hat < 0:
-        c = b
-    else:
-        c = a
-    return ((sigma_hat - c) / sigma_hat) * theta_hat + b * eta_loc
+                              loss_type='huber', scale_type='huber', dist='normal'):
+    theta_hat, _ = two_stage(x, delta, loss_type, scale_type, dist)
+    underline_sigma, overline_sigma, _, rprime = sign_split_rescalings(x, m, delta, scale_type, dist)
+    attacked_loc = _attacked_location_minus(rprime, m, delta, loss_type)
+    if np.isnan(attacked_loc):
+        return np.nan
+
+    sigma_m = underline_sigma if attacked_loc >= 0 else overline_sigma
+    return max(theta_hat - sigma_m * attacked_loc, 0.0)
 
 # --- 4. breakdown‐point lower bounds via those upper bounds ---
 def two_stage_BP_lower_plus(x, eta, delta=1.0,
-                  loss_type='huber', scale_type='MAD', dist='normal'):
+                  loss_type='huber', scale_type='huber', dist='normal'):
     """
     Compute BP_{η+} ≥ (1/n) * min{ m : two_stage_eta_upper_plus ≥ η }.
     """
@@ -258,7 +268,7 @@ def two_stage_BP_lower_plus(x, eta, delta=1.0,
     return 1.0
 
 def two_stage_BP_lower_minus(x, eta, delta=1.0,
-                   loss_type='huber', scale_type='MAD', dist='normal'):
+                   loss_type='huber', scale_type='huber', dist='normal'):
     """
     Compute BP_{η-} ≥ (1/n) * min{ m : two_stage_bound_eta_minus ≥ η }.
     """
